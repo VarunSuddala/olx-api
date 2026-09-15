@@ -7,16 +7,20 @@ import (
 	"time"
 
 	"github.com/VarunSuddala/olx-api/internal/config"
+	"github.com/VarunSuddala/olx-api/internal/db"
+	"github.com/VarunSuddala/olx-api/internal/handlers"
 )
 
 func main() {
 	cfg := config.MustLoad()
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"status":"ok"}`))
-	})
+	_, err := db.Connect(cfg.DBURL)
+	if err != nil {
+		log.Fatalf("main.db.connect :%v", err)
+	}
+
+	mux.HandleFunc("GET /healthz", handlers.Healthz)
+
 	srv := &http.Server{
 		Addr:         ":" + cfg.PORT,
 		Handler:      mux,
@@ -24,7 +28,8 @@ func main() {
 		WriteTimeout: time.Second * 30,
 		IdleTimeout:  time.Second * 60,
 	}
-	fmt.Printf("server is running %s", srv.Addr)
+	fmt.Println(("database connected"))
+	fmt.Println(("server is running"))
 	if err := srv.ListenAndServe(); err != nil {
 		log.Fatalf("server failed : %v", err)
 	}

@@ -7,8 +7,9 @@ import (
 )
 
 type Config struct {
-	PORT string
-	ENV  string
+	PORT  string
+	ENV   string
+	DBURL string
 }
 
 func MustLoad() Config {
@@ -22,8 +23,14 @@ func MustLoad() Config {
 	if env == "" {
 		panic("ENV is requires")
 	}
+
+	dburl := os.Getenv("DBURL")
+	if dburl == "" {
+		panic("data_url is required")
+	}
 	return Config{
-		PORT: port,
-		ENV:  env,
+		PORT:  port,
+		ENV:   env,
+		DBURL: dburl,
 	}
 }
