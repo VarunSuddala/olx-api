@@ -28,7 +28,7 @@ func main() {
 
 		log.Println("migrating up")
 	case "down":
-		if err := m.Down(); err != nil {
+		if err := m.Steps(-1); err != nil {
 			log.Fatalf("migrate.down %v", err)
 		}
 		log.Println("migrating down")

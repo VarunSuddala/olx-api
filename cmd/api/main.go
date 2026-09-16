@@ -14,13 +14,13 @@ import (
 func main() {
 	cfg := config.MustLoad()
 	mux := http.NewServeMux()
-	_, err := db.Connect(cfg.DBURL)
+	db, err := db.Connect(cfg.DBURL)
 	if err != nil {
 		log.Fatalf("main.db.connect :%v", err)
 	}
 
 	mux.HandleFunc("GET /healthz", handlers.Healthz)
-
+	mux.HandleFunc("GET /listings", handlers.Get_listings(db))
 	srv := &http.Server{
 		Addr:         ":" + cfg.PORT,
 		Handler:      mux,
