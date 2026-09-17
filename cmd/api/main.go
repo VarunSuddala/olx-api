@@ -18,9 +18,12 @@ func main() {
 	if err != nil {
 		log.Fatalf("main.db.connect :%v", err)
 	}
-
+	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"welcome":"olx-api"}`))
+	})
 	mux.HandleFunc("GET /healthz", handlers.Healthz)
 	mux.HandleFunc("GET /listings", handlers.Get_listings(db))
+	mux.HandleFunc("DELETE /listings/{id}", handlers.Delete_listing(db))
 	srv := &http.Server{
 		Addr:         ":" + cfg.PORT,
 		Handler:      mux,
