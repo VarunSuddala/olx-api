@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"time"
@@ -29,7 +30,11 @@ func NewListingHandler(db *sql.DB) *ListingHandler {
 }
 
 func (lh ListingHandler) Get_listings(w http.ResponseWriter, r *http.Request) {
-	rows, err := lh.db.Query(`select id,title,description,price,city,created_at from listings
+
+	// request scoped context
+	ctx := r.Context()
+	rows, err := lh.db.QueryContext(ctx,
+		`select id,title,description,price,city,created_at from listings
 		order by created_at Desc
 		limit 100`)
 	if err != nil {
@@ -58,13 +63,15 @@ func (lh ListingHandler) Get_listings(w http.ResponseWriter, r *http.Request) {
 }
 
 func (lh ListingHandler) Delete_listing(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	id := r.PathValue("id")
 	if id == "" {
 		w.WriteHeader(http.StatusBadRequest)
 		fmt.Fprintf(w, `{"msg":"id is required"}`)
 		return
 	}
-	_, err := lh.db.Exec("delete from listings where id = $1;", id)
+	_, err := lh.db.ExecContext(ctx,
+		`delete from listings where id = $1`, id)
 	if err != nil {
 		log.Printf("delete db.query :%v", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
@@ -72,4 +79,13 @@ func (lh ListingHandler) Delete_listing(w http.ResponseWriter, r *http.Request) 
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (lh ListingHandler) post_listing(w http.ResponseWriter, r *http.Request) {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		log.Printf("posting_listing : %v", err)
+		http.Error(w, "failed to read body", http.StatusBadRequest)
+	}
+	fmt.Println(string(body))
 }
