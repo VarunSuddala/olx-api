@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"log/slog"
 	"net/http"
 	"time"
 )
@@ -20,12 +21,14 @@ type listing struct {
 }
 
 type ListingHandler struct {
-	db *sql.DB
+	db     *sql.DB
+	logger *slog.Logger
 }
 
-func NewListingHandler(db *sql.DB) *ListingHandler {
+func NewListingHandler(db *sql.DB, logger *slog.Logger) *ListingHandler {
 	return &ListingHandler{
-		db: db,
+		db:     db,
+		logger: logger,
 	}
 }
 
@@ -38,7 +41,7 @@ func (lh ListingHandler) Get_listings(w http.ResponseWriter, r *http.Request) {
 		order by created_at Desc
 		limit 100`)
 	if err != nil {
-		log.Printf("Query : %v", err)
+		lh.logger.Error("lisitng error", "err", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
@@ -63,6 +66,8 @@ func (lh ListingHandler) Get_listings(w http.ResponseWriter, r *http.Request) {
 }
 
 func (lh ListingHandler) Delete_listing(w http.ResponseWriter, r *http.Request) {
+	// generate request id
+	
 	ctx := r.Context()
 	id := r.PathValue("id")
 	if id == "" {
@@ -72,8 +77,10 @@ func (lh ListingHandler) Delete_listing(w http.ResponseWriter, r *http.Request) 
 	}
 	_, err := lh.db.ExecContext(ctx,
 		`delete from listings where id = $1`, id)
+
 	if err != nil {
-		log.Printf("delete db.query :%v", err)
+
+		lh.logger.Error("delete failed", "listing_id", id, "err", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}

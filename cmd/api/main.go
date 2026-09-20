@@ -3,7 +3,9 @@ package main
 import (
 	"fmt"
 	"log"
+	"log/slog"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/VarunSuddala/olx-api/internal/config"
@@ -18,7 +20,15 @@ func main() {
 	if err != nil {
 		log.Fatalf("main.db.connect :%v", err)
 	}
-	lh := handlers.NewListingHandler(db)
+	handler := slog.NewJSONHandler(os.Stdout,&slog.HandlerOptions{
+		AddSource: true,
+		Level: slog.LevelDebug, 
+	})
+	logger := slog.New(handler)
+	slog.SetDefault(logger)
+
+	lh := handlers.NewListingHandler(db,logger)
+
 	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`{"welcome":"olx-api"}`))
 	})
