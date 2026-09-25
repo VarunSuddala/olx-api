@@ -9,6 +9,8 @@ import (
 	"log/slog"
 	"net/http"
 	"time"
+
+	"github.com/VarunSuddala/olx-api/internal/middleware"
 )
 
 type listing struct {
@@ -66,26 +68,34 @@ func (lh ListingHandler) Get_listings(w http.ResponseWriter, r *http.Request) {
 }
 
 func (lh ListingHandler) Delete_listing(w http.ResponseWriter, r *http.Request) {
-	// generate request id
 	
 	ctx := r.Context()
+	requestId := middleware.RequestIDContext(ctx)
 	id := r.PathValue("id")
 	if id == "" {
 		w.WriteHeader(http.StatusBadRequest)
 		fmt.Fprintf(w, `{"msg":"id is required"}`)
 		return
 	}
-	_, err := lh.db.ExecContext(ctx,
+	res, err := lh.db.ExecContext(ctx,
 		`delete from listings where id = $1`, id)
 
 	if err != nil {
 
-		lh.logger.Error("delete failed", "listing_id", id, "err", err)
+		lh.logger.Error("delete failed", "listing_id", id, "request_id", requestId, "err", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-
-	w.WriteHeader(http.StatusNoContent)
+	rowsAffected, _ := res.RowsAffected()
+	if rowsAffected == 0 {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprintf(w, `{"msg":"no listing found with id %s","request_id":"%s"}`, id, requestId)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", requestId)
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprintf(w, `{"msg":"deleted successfully","request_id":"%s"}`, requestId)
 }
 
 func (lh ListingHandler) post_listing(w http.ResponseWriter, r *http.Request) {
@@ -96,3 +106,4 @@ func (lh ListingHandler) post_listing(w http.ResponseWriter, r *http.Request) {
 	}
 	fmt.Println(string(body))
 }
+

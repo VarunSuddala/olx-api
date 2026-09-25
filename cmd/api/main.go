@@ -11,6 +11,7 @@ import (
 	"github.com/VarunSuddala/olx-api/internal/config"
 	"github.com/VarunSuddala/olx-api/internal/db"
 	"github.com/VarunSuddala/olx-api/internal/handlers"
+	"github.com/VarunSuddala/olx-api/internal/middleware"
 )
 
 func main() {
@@ -20,14 +21,14 @@ func main() {
 	if err != nil {
 		log.Fatalf("main.db.connect :%v", err)
 	}
-	handler := slog.NewJSONHandler(os.Stdout,&slog.HandlerOptions{
+	logHandler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
 		AddSource: true,
-		Level: slog.LevelDebug, 
+		Level:     slog.LevelDebug,
 	})
-	logger := slog.New(handler)
+	logger := slog.New(logHandler)
 	slog.SetDefault(logger)
 
-	lh := handlers.NewListingHandler(db,logger)
+	lh := handlers.NewListingHandler(db, logger)
 
 	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`{"welcome":"olx-api"}`))
@@ -35,9 +36,10 @@ func main() {
 	mux.HandleFunc("GET /healthz", handlers.Healthz)
 	mux.HandleFunc("GET /listings", lh.Get_listings)
 	mux.HandleFunc("DELETE /listings/{id}", lh.Delete_listing)
+	handler := middleware.RequestId(mux)
 	srv := &http.Server{
 		Addr:         ":" + cfg.PORT,
-		Handler:      mux,
+		Handler:      handler,
 		ReadTimeout:  time.Second * 10,
 		WriteTimeout: time.Second * 30,
 		IdleTimeout:  time.Second * 60,
