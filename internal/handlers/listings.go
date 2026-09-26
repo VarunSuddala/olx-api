@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/VarunSuddala/olx-api/internal/httpx"
 	"github.com/VarunSuddala/olx-api/internal/middleware"
 )
 
@@ -44,7 +45,7 @@ func (lh ListingHandler) Get_listings(w http.ResponseWriter, r *http.Request) {
 		limit 100`)
 	if err != nil {
 		lh.logger.Error("lisitng error", "err", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.Error(w, 500, "internal error", string(httpx.CodeInternalError))
 		return
 	}
 	defer rows.Close()
@@ -53,7 +54,7 @@ func (lh ListingHandler) Get_listings(w http.ResponseWriter, r *http.Request) {
 		l := listing{}
 		if err := rows.Scan(&l.ID, &l.Title, &l.Description, &l.Price, &l.City, &l.CreatedAt); err != nil {
 			log.Printf("rows.err %v", err)
-			http.Error(w, "internal error", http.StatusInternalServerError)
+			httpx.Error(w, 500, "internal error", string(httpx.CodeInternalError))
 			return
 		}
 		listings = append(listings, l)
@@ -61,14 +62,15 @@ func (lh ListingHandler) Get_listings(w http.ResponseWriter, r *http.Request) {
 
 	if err := rows.Err(); err != nil {
 		log.Printf("rows.err : %v", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.Error(w, 500, "internal error", string(httpx.CodeInternalError))
+
 		return
 	}
 	_ = json.NewEncoder(w).Encode(listings)
 }
 
 func (lh ListingHandler) Delete_listing(w http.ResponseWriter, r *http.Request) {
-	
+
 	ctx := r.Context()
 	requestId := middleware.RequestIDContext(ctx)
 	id := r.PathValue("id")
@@ -78,12 +80,13 @@ func (lh ListingHandler) Delete_listing(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	res, err := lh.db.ExecContext(ctx,
-		`delete from listings where id = $1`, id)
+		`delete from listing where id = $1`, id)
 
 	if err != nil {
 
 		lh.logger.Error("delete failed", "listing_id", id, "request_id", requestId, "err", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		// http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.Error(w, http.StatusInternalServerError, "Something went wrong", string(httpx.CodeInternalError))
 		return
 	}
 	rowsAffected, _ := res.RowsAffected()
@@ -105,5 +108,5 @@ func (lh ListingHandler) post_listing(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "failed to read body", http.StatusBadRequest)
 	}
 	fmt.Println(string(body))
-}
 
+}
