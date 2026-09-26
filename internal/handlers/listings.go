@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"log/slog"
 	"net/http"
@@ -27,6 +26,10 @@ type ListingHandler struct {
 	db     *sql.DB
 	logger *slog.Logger
 }
+type response struct {
+	Msg       string `json:"msg"`
+	RequestID string `json:"request_id"`
+}
 
 func NewListingHandler(db *sql.DB, logger *slog.Logger) *ListingHandler {
 	return &ListingHandler{
@@ -35,7 +38,7 @@ func NewListingHandler(db *sql.DB, logger *slog.Logger) *ListingHandler {
 	}
 }
 
-func (lh ListingHandler) Get_listings(w http.ResponseWriter, r *http.Request) {
+func (lh ListingHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 	// request scoped context
 	ctx := r.Context()
@@ -66,10 +69,12 @@ func (lh ListingHandler) Get_listings(w http.ResponseWriter, r *http.Request) {
 
 		return
 	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(listings)
 }
 
-func (lh ListingHandler) Delete_listing(w http.ResponseWriter, r *http.Request) {
+func (lh ListingHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 	requestId := middleware.RequestIDContext(ctx)
@@ -80,7 +85,7 @@ func (lh ListingHandler) Delete_listing(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	res, err := lh.db.ExecContext(ctx,
-		`delete from listing where id = $1`, id)
+		`delete from listings where id = $1`, id)
 
 	if err != nil {
 
@@ -91,22 +96,45 @@ func (lh ListingHandler) Delete_listing(w http.ResponseWriter, r *http.Request) 
 	}
 	rowsAffected, _ := res.RowsAffected()
 	if rowsAffected == 0 {
+		resp := response{
+			Msg:       fmt.Sprintf("no listing found with id %s", id),
+			RequestID: requestId,
+		}
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprintf(w, `{"msg":"no listing found with id %s","request_id":"%s"}`, id, requestId)
+		json.NewEncoder(w).Encode(resp)
 		return
 	}
+	resp := response{
+		Msg:       "deleted successfully",
+		RequestID: requestId,
+	}
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("X-Request-ID", requestId)
 	w.WriteHeader(http.StatusOK)
-	fmt.Fprintf(w, `{"msg":"deleted successfully","request_id":"%s"}`, requestId)
+	json.NewEncoder(w).Encode(resp)
 }
 
-func (lh ListingHandler) post_listing(w http.ResponseWriter, r *http.Request) {
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		log.Printf("posting_listing : %v", err)
-		http.Error(w, "failed to read body", http.StatusBadRequest)
+func (lh ListingHandler) Create(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	request_id := middleware.RequestIDContext(ctx)
+	var req listing
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		lh.logger.Error("failed to decode", "request_id", request_id, "err", err)
+		httpx.Error(w, http.StatusBadRequest, "invalid body", string(httpx.CodeMalformedJSON))
+		return
 	}
-	fmt.Println(string(body))
-
+	var id string
+	row := lh.db.QueryRowContext(ctx,
+		`INSERT INTO listings (title, description, price, city)
+         VALUES ($1, $2, $3, $4)
+         RETURNING id`, req.Title, req.Description, req.Price, req.City)
+	if err := row.Scan(&id); err != nil {
+		lh.logger.Error("failed to insert", "request_id", request_id, "err", err)
+		httpx.Error(w, http.StatusInternalServerError, "something wentwrong", string(httpx.CodeInternalError))
+		return
+	}
+	lh.logger.Info("listing created", "request_id", request_id, "listing_id", id)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	_ = json.NewEncoder(w).Encode(map[string]string{"id": id})
 }

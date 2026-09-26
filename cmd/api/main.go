@@ -34,8 +34,9 @@ func main() {
 		w.Write([]byte(`{"welcome":"olx-api"}`))
 	})
 	mux.HandleFunc("GET /healthz", handlers.Healthz)
-	mux.HandleFunc("GET /listings", lh.Get_listings)
-	mux.HandleFunc("DELETE /listings/{id}", lh.Delete_listing)
+	mux.HandleFunc("GET /listings", lh.Get)
+	mux.HandleFunc("DELETE /listings/{id}", lh.Delete)
+	mux.HandleFunc("POST /listings", lh.Create)
 	handler := middleware.RequestId(mux)
 	srv := &http.Server{
 		Addr:         ":" + cfg.PORT,
