@@ -3,6 +3,7 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"log/slog"
@@ -48,7 +49,7 @@ func (lh ListingHandler) Get(w http.ResponseWriter, r *http.Request) {
 		limit 100`)
 	if err != nil {
 		lh.logger.Error("lisitng error", "err", err)
-		httpx.Error(w, 500, "internal error", string(httpx.CodeInternalError))
+		httpx.Error(w, 500, "internal error", httpx.CodeInternalError)
 		return
 	}
 	defer rows.Close()
@@ -57,7 +58,7 @@ func (lh ListingHandler) Get(w http.ResponseWriter, r *http.Request) {
 		l := listing{}
 		if err := rows.Scan(&l.ID, &l.Title, &l.Description, &l.Price, &l.City, &l.CreatedAt); err != nil {
 			log.Printf("rows.err %v", err)
-			httpx.Error(w, 500, "internal error", string(httpx.CodeInternalError))
+			httpx.Error(w, 500, "internal error", httpx.CodeInternalError)
 			return
 		}
 		listings = append(listings, l)
@@ -65,7 +66,7 @@ func (lh ListingHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 	if err := rows.Err(); err != nil {
 		log.Printf("rows.err : %v", err)
-		httpx.Error(w, 500, "internal error", string(httpx.CodeInternalError))
+		httpx.Error(w, 500, "internal error", httpx.CodeInternalError)
 
 		return
 	}
@@ -91,7 +92,7 @@ func (lh ListingHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 		lh.logger.Error("delete failed", "listing_id", id, "request_id", requestId, "err", err)
 		// http.Error(w, "internal error", http.StatusInternalServerError)
-		httpx.Error(w, http.StatusInternalServerError, "Something went wrong", string(httpx.CodeInternalError))
+		httpx.Error(w, http.StatusInternalServerError, "Something went wrong", httpx.CodeInternalError)
 		return
 	}
 	rowsAffected, _ := res.RowsAffected()
@@ -120,9 +121,17 @@ func (lh ListingHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var req CreateListingRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		lh.logger.Error("failed to decode", "request_id", request_id, "err", err)
-		httpx.Error(w, http.StatusBadRequest, "invalid body", string(httpx.CodeMalformedJSON))
+		httpx.Error(w, http.StatusBadRequest, "invalid body", httpx.CodeMalformedJSON)
 		return
 	}
+
+	if err := req.validate(); err != nil {
+		var verr *validationError
+		errors.As(err, &verr)
+		httpx.ValidationError(w, http.StatusUnprocessableEntity, err.Error(), httpx.CodeValidationFailed, verr.Field)
+		return
+	}
+
 	var out CreateListingResponse
 	row := lh.db.QueryRowContext(ctx,
 		`INSERT INTO listings (title, description, price, city)
@@ -130,7 +139,7 @@ func (lh ListingHandler) Create(w http.ResponseWriter, r *http.Request) {
          RETURNING id,title,price,created_at`, req.Title, req.Description, req.Price, req.City)
 	if err := row.Scan(&out.ID, &out.Title, &out.Price, &out.CreatedAt); err != nil {
 		lh.logger.Error("failed to insert", "request_id", request_id, "err", err)
-		httpx.Error(w, http.StatusInternalServerError, "something wentwrong", string(httpx.CodeInternalError))
+		httpx.Error(w, http.StatusInternalServerError, "something wentwrong", httpx.CodeMalformedJSON)
 		return
 	}
 	lh.logger.Info("listing created", "request_id", request_id, "listing_id", out.ID)
